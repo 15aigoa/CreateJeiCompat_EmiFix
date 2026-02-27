@@ -14,7 +14,7 @@ import com.simibubi.create.content.processing.sequenced.SequencedAssemblyRecipe;
 import com.starion.createjeicompat.SequencedAssemblyPageManager;
 import mezz.jei.gui.recipes.RecipesGui;
 import mezz.jei.gui.recipes.RecipeGuiLayouts;
-import mezz.jei.gui.recipes.IRecipeLayoutWithButtons;
+import mezz.jei.gui.recipes.RecipeLayoutWithButtons;
 import mezz.jei.gui.recipes.IRecipeGuiLogic;
 import mezz.jei.api.gui.IRecipeLayoutDrawable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -39,8 +39,8 @@ public abstract class RecipesGuiMixin {
     private static java.lang.reflect.Method cachedUpdateLayoutMethod;
     private static final Object CACHE_LOCK = new Object();
 
-    @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true, remap = false)
-    private void createjeicompat$onMouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY, CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true, remap = false, require = 0)
+    private void createjeicompat$onMouseScrolled(double mouseX, double mouseY, double scrollDelta, CallbackInfoReturnable<Boolean> cir) {
         if (layouts == null) {
             return;
         }
@@ -65,15 +65,15 @@ public abstract class RecipesGuiMixin {
             }
             
             @SuppressWarnings("unchecked")
-            List<IRecipeLayoutWithButtons<?>> recipeLayouts = (List<IRecipeLayoutWithButtons<?>>) field.get(layouts);
+            List<RecipeLayoutWithButtons<?>> recipeLayouts = (List<RecipeLayoutWithButtons<?>>) field.get(layouts);
             
             if (recipeLayouts == null || recipeLayouts.isEmpty()) {
                 return;
             }
             
             // Check each recipe layout to see if mouse is over it and if it's a sequenced assembly recipe
-            for (IRecipeLayoutWithButtons<?> layoutWithButtons : recipeLayouts) {
-                IRecipeLayoutDrawable<?> recipeLayout = layoutWithButtons.getRecipeLayout();
+            for (RecipeLayoutWithButtons<?> layoutWithButtons : recipeLayouts) {
+                IRecipeLayoutDrawable<?> recipeLayout = layoutWithButtons.recipeLayout();
                 
                 // Check if mouse is over this layout
                 if (!recipeLayout.isMouseOver(mouseX, mouseY)) {
@@ -102,7 +102,7 @@ public abstract class RecipesGuiMixin {
                 
                 if (sequencedRecipe != null) {
                     // Check if we can scroll (not at boundary)
-                    boolean canScroll = SequencedAssemblyPageManager.canScroll(sequencedRecipe, scrollY);
+                    boolean canScroll = SequencedAssemblyPageManager.canScroll(sequencedRecipe, scrollDelta);
                     
                     // If we're at a boundary (can't scroll), cancel the event to prevent JEI scrolling
                     if (!canScroll) {
@@ -111,7 +111,7 @@ public abstract class RecipesGuiMixin {
                     }
                     
                     // Handle scroll for sequenced assembly recipe
-                    if (SequencedAssemblyPageManager.handleScroll(sequencedRecipe, scrollY)) {
+                    if (SequencedAssemblyPageManager.handleScroll(sequencedRecipe, scrollDelta)) {
                         // Invalidate the layout cache in RecipeGuiLogic to force recreation
                         // This will cause updateLayout() to rebuild all layouts, calling setRecipe() again
                         try {

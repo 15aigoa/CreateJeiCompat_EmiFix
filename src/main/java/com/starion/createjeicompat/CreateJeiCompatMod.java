@@ -9,14 +9,13 @@ package com.starion.createjeicompat;
  * the JEI display of sequenced assembly recipes with pagination, allowing
  * recipes with more than 6 steps to be properly displayed.
  */
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.common.Mod;
+import net.minecraftforge.fml.common.Mod;
 
 @Mod(CreateJeiCompatMod.MOD_ID)
 public class CreateJeiCompatMod {
     public static final String MOD_ID = "createjeicompat";
 
-    public CreateJeiCompatMod(IEventBus modEventBus) {
+    public CreateJeiCompatMod() {
         // Register anything here
     }
 }

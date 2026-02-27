@@ -23,7 +23,7 @@ import com.simibubi.create.foundation.utility.CreateLang;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
-import mezz.jei.api.neoforge.NeoForgeTypes;
+import mezz.jei.api.forge.ForgeTypes;
 import mezz.jei.api.recipe.IFocusGroup;
 import mezz.jei.api.recipe.RecipeIngredientRole;
 import net.minecraft.ChatFormatting;
@@ -35,7 +35,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.neoforged.neoforge.fluids.crafting.SizedFluidIngredient;
+import com.simibubi.create.foundation.fluid.FluidIngredient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
@@ -161,8 +161,8 @@ public abstract class SequencedAssemblyCategoryMixin {
                 NonNullList<Ingredient> sequencedIngredients = sequencedRecipe.getRecipe().getIngredients();
                 for (Ingredient ingredient : sequencedIngredients.subList(1, sequencedIngredients.size()))
                     builder.addInvisibleIngredients(RecipeIngredientRole.INPUT).addIngredients(ingredient);
-                for (SizedFluidIngredient fluidIngredient : sequencedRecipe.getRecipe().getFluidIngredients())
-                    builder.addInvisibleIngredients(RecipeIngredientRole.INPUT).addIngredients(NeoForgeTypes.FLUID_STACK, Arrays.asList(fluidIngredient.getFluids()));
+                for (FluidIngredient fluidIngredient : sequencedRecipe.getRecipe().getFluidIngredients())
+                    builder.addInvisibleIngredients(RecipeIngredientRole.INPUT).addIngredients(ForgeTypes.FLUID_STACK, fluidIngredient.getMatchingFluidStacks());
             }
         }
     }

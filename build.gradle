@@ -3,37 +3,29 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.neoforged.gradle.userdev' version '7.0.170'
-}
-
-tasks.named('wrapper', Wrapper).configure {
-    distributionType = Wrapper.DistributionType.BIN
+    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
 }
 
 group = 'com.starion.createjeicompat'
 
-base {
-    archivesName = 'createjeicompat'
-}
+// Auto-detect version from git tags (supports branch-specific prefixes: v* or forge-v*)
+def tagPrefix = (findProperty('version_tag_prefix') ?: 'v').trim()
+if (tagPrefix.isEmpty()) tagPrefix = 'v'
+def matchPattern = tagPrefix + '*'
 
-// Auto-detect version from git tags
 def getVersionFromGit = {
     try {
         def stdout = new ByteArrayOutputStream()
         exec {
-            commandLine 'git', 'describe', '--tags', '--abbrev=0'
+            commandLine 'git', 'describe', '--tags', '--abbrev=0', '--match', matchPattern
             standardOutput = stdout
             ignoreExitValue = true
         }
         def tag = stdout.toString().trim()
-        if (tag.isEmpty() || !tag.startsWith('v')) {
-            return '1.0.0-SNAPSHOT'
+        if (tag.isEmpty() || !tag.startsWith(tagPrefix)) {
+            return mod_version
         }
-        
-        // Remove 'v' prefix and get version (e.g., v1.0.1 -> 1.0.1)
-        def baseVersion = tag.replace('v', '')
-        
-        // Check if there are commits after the tag
+        def baseVersion = tag.replace(tagPrefix, '')
         def countStdout = new ByteArrayOutputStream()
         exec {
             commandLine 'git', 'rev-list', '--count', tag + '..HEAD'
@@ -41,12 +33,9 @@ def getVersionFromGit = {
             ignoreExitValue = true
         }
         def commitCount = countStdout.toString().trim().toInteger()
-        
         if (commitCount == 0) {
-            // On tag commit - use stable version
             return baseVersion
         } else {
-            // Commits after tag - use next patch version with -beta suffix
             def parts = baseVersion.split('\\.')
             def major = parts[0].toInteger()
             def minor = parts[1].toInteger()
@@ -54,76 +43,101 @@ def getVersionFromGit = {
             return "${major}.${minor}.${patch + 1}-beta"
         }
     } catch (Exception e) {
-        // Fallback if git is not available
-        return '1.0.0-SNAPSHOT'
+        return mod_version
     }
 }
 
 version = getVersionFromGit()
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+base {
+    archivesName = 'createjeicompat'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
 
 repositories {
     mavenLocal()
-    maven {
-        name = 'Curseforge Maven'
-        url = "https://www.cursemaven.com"
-        content {
-            includeGroup "curse.maven"
+    maven { name = "Jared's maven"; url = "https://maven.blamejared.com/" }
+    maven { name = "Curseforge Maven"; url = "https://www.cursemaven.com"; content { includeGroup "curse.maven" } }
+    maven { url = "https://maven.createmod.net" }
+    maven { url = "https://maven.ithundxr.dev/mirror" }
+    maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/" }
+    flatDir { dirs 'c:/mc/jars', 'c:/mc/forge' }
+}
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods { "${mod_id}" { source sourceSets.main } }
+            property("mixin.env.remapRefMap", "true")
+            property("mixin.env.refMapRemappingFile", "${projectDir}/build/createSrgToMcp/output.srg")
         }
-    }
-    maven { url = "https://maven.createmod.net" } // Create mod and catnip
-    maven { url = "https://mvn.devos.one/snapshots" }
-    maven { url = "https://maven.blamejared.com" } // JEI
-    flatDir {
-        dirs 'c:/mc/jars'
+        client { property 'forge.enabledGameTestNamespaces', mod_id }
+        server { args '--nogui'; property 'forge.enabledGameTestNamespaces', mod_id }
     }
 }
 
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
+def createJar = file('c:/mc/forge/create-1.20.1-6.0.8.jar')
+// Prefer locally built JEI from C:\mc\forge\JustEnoughItems (exact structure for mixin)
+def jeiBuiltDir = file('c:/mc/forge/JustEnoughItems/Forge/build/libs')
+def jeiBuiltJar = null
+if (jeiBuiltDir.exists()) {
+    def jars = fileTree(jeiBuiltDir) { include 'jei-1.20.1-forge-*.jar'; exclude '*-sources.jar' }.files
+    if (!jars.isEmpty()) jeiBuiltJar = jars.iterator().next()
 }
+def jeiJar = jeiBuiltJar ?: file('c:/mc/forge/jei-1.20.1-forge-15.20.0.129.jar')
 
 dependencies {
-    implementation "net.neoforged:neoforge:21.1.73"
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    // JEI and Create mods - using local files
-    // These are provided at runtime, but we need them for compilation
-    // Use Create dev JAR first (should have catnip), then fallback to release JAR
-    def createDevJar = file('c:/mc/Create-mc1.21.1-dev/build/libs/create-1.21.1-6.0.10.jar')
-    if (createDevJar.exists()) {
-        compileOnly files(createDevJar)
+    if (createJar.exists()) {
+        implementation(project.files(createJar))
     } else {
-        compileOnly files('c:/mc/jars/create-1.21.1-6.0.8.jar')
+        implementation(fg.deobf("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false })
+        implementation(fg.deobf("net.createmod.ponder:Ponder-Forge-${minecraft_version}:${ponder_version}"))
+        compileOnly(fg.deobf("dev.engine-room.flywheel:flywheel-forge-api-${minecraft_version}:${flywheel_version}"))
+        runtimeOnly(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}"))
+        implementation(fg.deobf("com.tterrag.registrate:Registrate:${registrate_version}"))
     }
-    compileOnly files('c:/mc/jars/jei-1.21.1-neoforge-19.27.0.336.jar')
-    
-    // Also add as implementation for runtime
-    implementation files('c:/mc/jars/jei-1.21.1-neoforge-19.27.0.336.jar')
-    implementation files('c:/mc/jars/create-1.21.1-6.0.8.jar')
-    
-    // Mixin
+
+    if (jeiJar.exists()) {
+        compileOnly(project.files(jeiJar))
+        runtimeOnly(project.files(jeiJar))
+    } else {
+        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"))
+        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"))
+        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}"))
+        runtimeOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}"))
+    }
+
     compileOnly 'org.spongepowered:mixin:0.8.5'
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
-tasks.withType(ProcessResources).configureEach {
+tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-            minecraft_version      : '1.21.1',
-            minecraft_version_range: '[1.21.1]',
-            neo_version            : '21.1.73',
-            neo_version_range      : '[21.1.73,)',
-            loader_version_range   : '[4,)',
-            mod_id                 : 'createjeicompat',
-            mod_name               : 'Create JEI Compat',
-            mod_license            : 'MIT',
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            forge_version          : forge_version,
+            forge_version_range    : forge_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
             mod_version            : project.version,
-            mod_authors            : 'Starion',
-            mod_description        : 'JEI compatibility mod for Create mod with enhanced sequenced assembly display'
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
     ]
     inputs.properties replaceProperties
-
-    filesMatching(['META-INF/neoforge.mods.toml']) {
+    filesMatching(['META-INF/mods.toml']) {
         expand replaceProperties
     }
 }
@@ -133,9 +147,20 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 jar {
-    // Exclude stub classes from the final JAR - they're only for compilation
     exclude 'net/**'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes([
+                "Specification-Title"    : mod_id,
+                "Specification-Vendor"   : mod_authors,
+                "Specification-Version"  : "1",
+                "Implementation-Title"   : project.name,
+                "Implementation-Version": project.jar.archiveVersion,
+                "Implementation-Vendor"  : mod_authors,
+                "MixinConfigs"           : "createjeicompat.mixins.json"
+        ])
+    }
+    finalizedBy 'reobfJar'
 }
 
 idea {
@@ -144,4 +169,3 @@ idea {
         downloadJavadoc = true
     }
 }
-
