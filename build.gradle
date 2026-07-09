@@ -1,171 +1,103 @@
-plugins {
-    id 'java-library'
-    id 'eclipse'
-    id 'idea'
-    id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
-}
-
-group = 'com.starion.createjeicompat'
-
-// Auto-detect version from git tags (supports branch-specific prefixes: v* or forge-v*)
-def tagPrefix = (findProperty('version_tag_prefix') ?: 'v').trim()
-if (tagPrefix.isEmpty()) tagPrefix = 'v'
-def matchPattern = tagPrefix + '*'
-
-def getVersionFromGit = {
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'describe', '--tags', '--abbrev=0', '--match', matchPattern
-            standardOutput = stdout
-            ignoreExitValue = true
-        }
-        def tag = stdout.toString().trim()
-        if (tag.isEmpty() || !tag.startsWith(tagPrefix)) {
-            return mod_version
-        }
-        def baseVersion = tag.replace(tagPrefix, '')
-        def countStdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-list', '--count', tag + '..HEAD'
-            standardOutput = countStdout
-            ignoreExitValue = true
-        }
-        def commitCount = countStdout.toString().trim().toInteger()
-        if (commitCount == 0) {
-            return baseVersion
-        } else {
-            def parts = baseVersion.split('\\.')
-            def major = parts[0].toInteger()
-            def minor = parts[1].toInteger()
-            def patch = parts.length > 2 ? parts[2].toInteger() : 0
-            return "${major}.${minor}.${patch + 1}-beta"
-        }
-    } catch (Exception e) {
-        return mod_version
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
+        maven { url = 'https://maven.parchmentmc.org' }
+    }
+    dependencies {
+        classpath "net.minecraftforge.gradle:ForgeGradle:${forgegradle_version}"
+        classpath "org.spongepowered:mixingradle:${mixingradle_version}"
     }
 }
 
-version = getVersionFromGit()
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'org.parchmentmc.librarian.forgegradle'
+apply plugin: 'eclipse'
+apply plugin: 'org.spongepowered.mixin'
 
-base {
-    archivesName = 'createjeicompat'
+version = mod_version
+group = 'com.starion.createjeicompat'
+archivesBaseName = mod_id
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getProperty('java.vm.version') +
+        ' (' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
+
+minecraft {
+    if (Boolean.parseBoolean(project.use_parchment)) {
+        mappings channel: 'parchment', version: "${parchment_version}-${minecraft_version}"
+    } else {
+        mappings channel: 'official', version: "${minecraft_version}"
+    }
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            arg '-mixin.config=createjeicompat.mixins.json'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                createjeicompat {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
+mixin {
+    add sourceSets.main, "createjeicompat.refmap.json"
+    config "createjeicompat.mixins.json"
 }
 
 repositories {
-    mavenLocal()
-    maven { name = "Jared's maven"; url = "https://maven.blamejared.com/" }
-    maven { name = "Curseforge Maven"; url = "https://www.cursemaven.com"; content { includeGroup "curse.maven" } }
-    maven { url = "https://maven.createmod.net" }
-    maven { url = "https://maven.ithundxr.dev/mirror" }
-    maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/" }
-    flatDir { dirs 'c:/mc/jars', 'c:/mc/forge' }
-}
-
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
-    copyIdeResources = true
-
-    runs {
-        configureEach {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-            mods { "${mod_id}" { source sourceSets.main } }
-            property("mixin.env.remapRefMap", "true")
-            property("mixin.env.refMapRemappingFile", "${projectDir}/build/createSrgToMcp/output.srg")
-        }
-        client { property 'forge.enabledGameTestNamespaces', mod_id }
-        server { args '--nogui'; property 'forge.enabledGameTestNamespaces', mod_id }
+    maven {
+        // Create + Catnip + Flywheel + Ponder
+        name = "tterrag maven"
+        url = "https://maven.tterrag.com/"
     }
+    maven {
+        // JEI
+        name = "Progwml6 maven"
+        url = "https://dvs1.progwml6.com/files/maven/"
+    }
+    maven {
+        // JEI mirror
+        name = "JEI mirror"
+        url = "https://modmaven.dev/"
+    }
+    mavenCentral()
 }
-
-def createJar = file('c:/mc/forge/create-1.20.1-6.0.8.jar')
-// Prefer locally built JEI from C:\mc\forge\JustEnoughItems (exact structure for mixin)
-def jeiBuiltDir = file('c:/mc/forge/JustEnoughItems/Forge/build/libs')
-def jeiBuiltJar = null
-if (jeiBuiltDir.exists()) {
-    def jars = fileTree(jeiBuiltDir) { include 'jei-1.20.1-forge-*.jar'; exclude '*-sources.jar' }.files
-    if (!jars.isEmpty()) jeiBuiltJar = jars.iterator().next()
-}
-def jeiJar = jeiBuiltJar ?: file('c:/mc/forge/jei-1.20.1-forge-15.20.0.129.jar')
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    if (createJar.exists()) {
-        implementation(project.files(createJar))
-    } else {
-        implementation(fg.deobf("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false })
-        implementation(fg.deobf("net.createmod.ponder:Ponder-Forge-${minecraft_version}:${ponder_version}"))
-        compileOnly(fg.deobf("dev.engine-room.flywheel:flywheel-forge-api-${minecraft_version}:${flywheel_version}"))
-        runtimeOnly(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}"))
-        implementation(fg.deobf("com.tterrag.registrate:Registrate:${registrate_version}"))
-    }
+    // Create (compile against; provided at runtime by the modpack, not bundled)
+    compileOnly fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim")
+    annotationProcessor fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim")
 
-    if (jeiJar.exists()) {
-        compileOnly(project.files(jeiJar))
-        runtimeOnly(project.files(jeiJar))
-    } else {
-        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"))
-        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}"))
-        compileOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}"))
-        runtimeOnly(fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}"))
-    }
-
-    compileOnly 'org.spongepowered:mixin:0.8.5'
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // JEI (compile against; provided at runtime)
+    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
+    runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
 }
 
-tasks.named('processResources', ProcessResources).configure {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            forge_version          : forge_version,
-            forge_version_range    : forge_version_range,
-            loader_version_range   : loader_version_range,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : project.version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
-    ]
-    inputs.properties replaceProperties
-    filesMatching(['META-INF/mods.toml']) {
-        expand replaceProperties
-    }
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-}
+// If your local Gradle can't resolve the Create "slim" API artifact, fall back to the full jar
+// you already have in your modpack: drop it in "libs/" and use
+//   compileOnly fg.deobf(files('libs/create-1.20.1-6.0.8.jar'))
+// instead of the Maven coordinate above.
 
 jar {
-    exclude 'net/**'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes([
-                "Specification-Title"    : mod_id,
-                "Specification-Vendor"   : mod_authors,
-                "Specification-Version"  : "1",
-                "Implementation-Title"   : project.name,
-                "Implementation-Version": project.jar.archiveVersion,
-                "Implementation-Vendor"  : mod_authors,
-                "MixinConfigs"           : "createjeicompat.mixins.json"
+                "Specification-Title"     : mod_id,
+                "Specification-Vendor"    : mod_authors,
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.jar.archiveVersion,
+                "Implementation-Vendor"   : mod_authors,
+                "MixinConfigs"            : "createjeicompat.mixins.json"
         ])
-    }
-    finalizedBy 'reobfJar'
-}
-
-idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
     }
 }
