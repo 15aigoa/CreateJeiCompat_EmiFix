@@ -1,5 +1,22 @@
 # Create JEI Compat
 
+Special thanks to Starior for creating the original project.
+This fork was made possible largely thanks to Claude.
+
+## Points to note when building
+Please make sure to place these two JAR files in the `libs` folder before building:
+
+1. create-1.20.1-6.0.8.jar   (https://modrinth.com/mod/create/version/mc1.20.1-6.0.8)
+2. jei-1.20.1-forge-15.20.0.106.jar   (https://modrinth.com/mod/jei/version/WTWP98yg)
+
+### Make sure to place these two JAR files in the `libs` folder before building.
+
+  1. create-1.20.1-6.0.8.jar   (https://modrinth.com/mod/create/version/mc1.20.1-6.0.8)
+  2. jei-1.20.1-forge-15.20.0.106.jar   (https://modrinth.com/mod/jei/version/WTWP98yg)
+
+The following is the original README.
+# Create JEI Compat
+
 A compatibility mod for Create and JEI that enhances the display of sequenced assembly recipes in JEI.
 
 This mod extends the functionality of [Create mod](https://github.com/Creators-of-Create/Create) and [JEI (Just Enough Items)](https://github.com/mezz/JustEnoughItems) by adding pagination support to sequenced assembly recipe displays in JEI. The implementation uses Mixin to enhance Create mod's `SequencedAssemblyCategory` class with pagination features.
