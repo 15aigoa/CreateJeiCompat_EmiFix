@@ -3,7 +3,6 @@ buildscript {
         maven { url = 'https://maven.minecraftforge.net' }
         mavenCentral()
         maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
-        maven { url = 'https://maven.parchmentmc.org' }
     }
     dependencies {
         classpath "net.minecraftforge.gradle:ForgeGradle:${forgegradle_version}"
@@ -12,7 +11,6 @@ buildscript {
 }
 
 apply plugin: 'net.minecraftforge.gradle'
-apply plugin: 'org.parchmentmc.librarian.forgegradle'
 apply plugin: 'eclipse'
 apply plugin: 'org.spongepowered.mixin'
 
@@ -26,11 +24,7 @@ println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getPro
         ' (' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
 
 minecraft {
-    if (Boolean.parseBoolean(project.use_parchment)) {
-        mappings channel: 'parchment', version: "${parchment_version}-${minecraft_version}"
-    } else {
-        mappings channel: 'official', version: "${minecraft_version}"
-    }
+    mappings channel: 'official', version: "${minecraft_version}"
 
     runs {
         client {
@@ -52,41 +46,20 @@ mixin {
 }
 
 repositories {
-    maven {
-        // Create + Catnip + Flywheel + Ponder
-        name = "tterrag maven"
-        url = "https://maven.tterrag.com/"
-    }
-    maven {
-        // JEI
-        name = "Progwml6 maven"
-        url = "https://dvs1.progwml6.com/files/maven/"
-    }
-    maven {
-        // JEI mirror
-        name = "JEI mirror"
-        url = "https://modmaven.dev/"
-    }
     mavenCentral()
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    // Create (compile against; provided at runtime by the modpack, not bundled)
-    compileOnly fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim")
-    annotationProcessor fg.deobf("com.simibubi.create:create-${create_minecraft_version}:${create_version}:slim")
-
-    // JEI (compile against; provided at runtime)
-    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
-    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
-    runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+    // Create and JEI: compiled against the exact jars from YOUR modpack's mods/ folder.
+    // Copy them into a "libs" folder next to this build.gradle, named exactly as below
+    // (or edit the filenames here to match whatever you copied).
+    // They are NOT bundled into the built mod jar (compileOnly) - your modpack already
+    // provides the real ones at runtime.
+    compileOnly fg.deobf(files('libs/create-1.20.1-6.0.8.jar'))
+    compileOnly fg.deobf(files('libs/jei-1.20.1-forge-15.20.0.106.jar'))
 }
-
-// If your local Gradle can't resolve the Create "slim" API artifact, fall back to the full jar
-// you already have in your modpack: drop it in "libs/" and use
-//   compileOnly fg.deobf(files('libs/create-1.20.1-6.0.8.jar'))
-// instead of the Maven coordinate above.
 
 jar {
     manifest {
