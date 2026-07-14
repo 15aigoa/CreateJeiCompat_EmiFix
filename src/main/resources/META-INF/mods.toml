@@ -1,50 +1,81 @@
-modLoader="javafml"
-loaderVersion="[47,)"
-license="MIT"
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
+    }
+    dependencies {
+        classpath "net.minecraftforge.gradle:ForgeGradle:${forgegradle_version}"
+        classpath "org.spongepowered:mixingradle:${mixingradle_version}"
+    }
+}
 
-[[mods]]
-modId="createjeicompatemifix"
-version="${file.jarVersion}"
-displayName="Create JEI/EMI Compat"
-authors="Igoa"
-description='''
-Adds pagination (page-turn buttons) to Create's Sequenced Assembly recipe display
-in JEI and EMI, so recipes with more than 6 steps display correctly.
-'''
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'eclipse'
+apply plugin: 'org.spongepowered.mixin'
 
-[[dependencies.createjeicompatemifix]]
-    modId="forge"
-    mandatory=true
-    versionRange="[47,)"
-    ordering="NONE"
-    side="BOTH"
+version = mod_version
+group = 'com.starion.createjeicompat'
+archivesBaseName = mod_id
 
-[[dependencies.createjeicompatemifix]]
-    modId="minecraft"
-    mandatory=true
-    versionRange="[1.20.1,1.20.2)"
-    ordering="NONE"
-    side="CLIENT"
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-[[dependencies.createjeicompatemifix]]
-    modId="create"
-    mandatory=true
-    versionRange="[6.0.0,)"
-    ordering="AFTER"
-    side="CLIENT"
+println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getProperty('java.vm.version') +
+        ' (' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
 
-[[dependencies.createjeicompatemifix]]
-    modId="jei"
-    mandatory=true
-    versionRange="[15.20.0,)"
-    ordering="AFTER"
-    side="CLIENT"
+minecraft {
+    mappings channel: 'official', version: "${minecraft_version}"
 
-# EMI is optional: the mod works standalone with JEI, and automatically also
-# benefits EMI (via EMI's built-in JEI compatibility layer) if EMI is present.
-[[dependencies.createjeicompatemifix]]
-    modId="emi"
-    mandatory=false
-    versionRange="[1.1.0,)"
-    ordering="AFTER"
-    side="CLIENT"
+    runs {
+        client {
+            workingDirectory project.file('run')
+            arg '-mixin.config=createjeicompat.mixins.json'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                createjeicompatemifix {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "createjeicompat.refmap.json"
+    config "createjeicompat.mixins.json"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Create and JEI: compiled against the exact jars from YOUR modpack's mods/ folder.
+    // Copy them into a "libs" folder next to this build.gradle, named exactly as below
+    // (or edit the filenames here to match whatever you copied).
+    // They are NOT bundled into the built mod jar (compileOnly) - your modpack already
+    // provides the real ones at runtime.
+    compileOnly fg.deobf(files('libs/create-1.20.1-6.0.8.jar'))
+    compileOnly fg.deobf(files('libs/jei-1.20.1-forge-15.20.0.106.jar'))
+
+    // EMI: only needed to COMPILE against (for EmiRecipeScreenRefresher). EMI is an
+    // optional dependency at runtime (see mods.toml) - the mod still works fine on
+    // setups that don't have EMI installed at all.
+    compileOnly fg.deobf(files('libs/emi-1.1.24+1.20.1+forge.jar'))
+}
+
+jar {
+    manifest {
+        attributes([
+                "Specification-Title"     : mod_id,
+                "Specification-Vendor"    : mod_authors,
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.jar.archiveVersion,
+                "Implementation-Vendor"   : mod_authors,
+                "MixinConfigs"            : "createjeicompat.mixins.json"
+        ])
+    }
+}
