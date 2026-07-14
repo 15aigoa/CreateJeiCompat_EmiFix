@@ -33,13 +33,18 @@ package com.starion.createjeicompat.mixin;
  *   page currently being displayed.
  * - Known limitation: switching pages updates the visuals, tooltips, and
  *   page-turn buttons immediately and correctly (they're recalculated
- *   every frame). The *visible* JEI ingredient slots for step icons,
- *   however, are only rebuilt the next time JEI/EMI rebuilds the recipe
- *   layout on their own (e.g. reopening the recipe, resizing, switching
- *   category/page in JEI's own list). We intentionally avoided using
- *   reflection into JEI/EMI internals to force an immediate rebuild,
- *   since that was the main source of fragility in the previous version
- *   of this mod.
+ *   every frame). The *visible* JEI ingredient slots for step icons are
+ *   handled separately: after a page change, we call
+ *   JeiRecipesGuiRefresher.refreshIfShowing(), which pokes JEI's private
+ *   internals (via reflection) to rebuild its cached layout in place. We
+ *   tried the public IJeiRuntime.getRecipesGui().showRecipes() API first,
+ *   but it also changes JEI's browsing state/history and caused an
+ *   unwanted "jump to an unrelated recipe list" side effect - see
+ *   JeiRecipesGuiRefresher's own comment for details. The reflection
+ *   approach is scoped to JEI only; EMI rebuilds its own widget list
+ *   independently and isn't covered by either mechanism, so EMI's item
+ *   icons may still lag behind a page change until EMI itself re-shows
+ *   the recipe.
  *
  * Original Create mod code: https://github.com/Creators-of-Create/Create (MIT)
  * JEI: https://github.com/mezz/JustEnoughItems (MIT)
@@ -52,6 +57,8 @@ import com.simibubi.create.compat.jei.category.sequencedAssembly.SequencedAssemb
 import com.simibubi.create.content.processing.sequenced.SequencedAssemblyRecipe;
 import com.simibubi.create.content.processing.sequenced.SequencedRecipe;
 import com.simibubi.create.foundation.fluid.FluidIngredient;
+import com.starion.createjeicompat.EmiRecipeScreenRefresher;
+import com.starion.createjeicompat.JeiRecipesGuiRefresher;
 import com.starion.createjeicompat.SequencedAssemblyPageManager;
 import mezz.jei.api.forge.ForgeTypes;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -74,6 +81,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.lwjgl.glfw.GLFW;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +90,9 @@ import java.util.Map;
 
 @Mixin(value = SequencedAssemblyCategory.class)
 public abstract class SequencedAssemblyCategoryMixin {
+
+    @Unique
+    private static final Logger createjeicompat$LOGGER = LogManager.getLogger("createjeicompat");
 
     @Unique
     private static final int STEP_MARGIN = 3;
@@ -140,6 +152,8 @@ public abstract class SequencedAssemblyCategoryMixin {
 
     @Overwrite(remap = false)
     public void setRecipe(IRecipeLayoutBuilder builder, SequencedAssemblyRecipe recipe, IFocusGroup focuses) {
+        createjeicompat$LOGGER.info("setRecipe called (mixin is active) - {} total steps, page size = {}",
+                recipe.getSequence().size(), SequencedAssemblyPageManager.getStepsPerPage());
         boolean noRandomOutput = recipe.getOutputChance() == 1;
         int xOffset = noRandomOutput ? 0 : -7;
 
@@ -356,13 +370,21 @@ public abstract class SequencedAssemblyCategoryMixin {
      */
     public boolean handleInput(Object recipeObj, double mouseX, double mouseY, InputConstants.Key input) {
         SequencedAssemblyRecipe recipe = (SequencedAssemblyRecipe) recipeObj;
+        createjeicompat$LOGGER.info("handleInput called: type={} value={} mouseX={} mouseY={}",
+                input.getType(), input.getValue(), mouseX, mouseY);
 
         if (input.getType() == InputConstants.Type.KEYSYM) {
             if (input.getValue() == GLFW.GLFW_KEY_UP) {
-                return SequencedAssemblyPageManager.previousPage(recipe);
+                boolean changed = SequencedAssemblyPageManager.previousPage(recipe);
+                createjeicompat$LOGGER.info("UP key: page changed = {}", changed);
+                if (changed) createjeicompat$scheduleRefresh();
+                return changed;
             }
             if (input.getValue() == GLFW.GLFW_KEY_DOWN) {
-                return SequencedAssemblyPageManager.nextPage(recipe);
+                boolean changed = SequencedAssemblyPageManager.nextPage(recipe);
+                createjeicompat$LOGGER.info("DOWN key: page changed = {}", changed);
+                if (changed) createjeicompat$scheduleRefresh();
+                return changed;
             }
             return false;
         }
@@ -373,6 +395,7 @@ public abstract class SequencedAssemblyCategoryMixin {
 
         int totalPages = SequencedAssemblyPageManager.getTotalPages(recipe);
         if (totalPages <= 1) {
+            createjeicompat$LOGGER.info("mouse click: totalPages={}, nothing to page through", totalPages);
             return false;
         }
 
@@ -390,14 +413,49 @@ public abstract class SequencedAssemblyCategoryMixin {
         int downX = bgWidth - font.width(down);
 
         int currentPage = SequencedAssemblyPageManager.getCurrentPage(recipe);
+        createjeicompat$LOGGER.info(
+                "mouse click: bgWidth={} bgHeight={} upBox=({},{},{},{}) downBox=({},{},{},{}) currentPage={} totalPages={}",
+                bgWidth, bgHeight, upX, upY, font.width(up), lineHeight, downX, downY, font.width(down), lineHeight,
+                currentPage, totalPages);
 
         if (currentPage > 0 && createjeicompat$isOver(mouseX, mouseY, upX, upY, font.width(up), lineHeight)) {
-            return SequencedAssemblyPageManager.previousPage(recipe);
+            boolean changed = SequencedAssemblyPageManager.previousPage(recipe);
+            createjeicompat$LOGGER.info("up button hit: page changed = {}", changed);
+            if (changed) createjeicompat$scheduleRefresh();
+            return changed;
         }
         if (currentPage < totalPages - 1 && createjeicompat$isOver(mouseX, mouseY, downX, downY, font.width(down), lineHeight)) {
-            return SequencedAssemblyPageManager.nextPage(recipe);
+            boolean changed = SequencedAssemblyPageManager.nextPage(recipe);
+            createjeicompat$LOGGER.info("down button hit: page changed = {}", changed);
+            if (changed) createjeicompat$scheduleRefresh();
+            return changed;
         }
+        createjeicompat$LOGGER.info("mouse click: not within either button's box");
         return false;
+    }
+
+    /**
+     * Deferred via Minecraft.execute() (runs right after the current
+     * frame/input event finishes) rather than called synchronously, because
+     * this runs from inside JEI's/EMI's own click-dispatch loop - mutating
+     * their cached layout/widget lists while they're still iterating over
+     * it could corrupt that iteration.
+     *
+     * Calls both refreshers; each one internally checks whether the
+     * currently-open screen is actually theirs and no-ops otherwise, so
+     * only the relevant one does anything. The EMI call is additionally
+     * gated on ModList so we never even touch EMI's classes (which would
+     * throw NoClassDefFoundError) on a setup that doesn't have EMI
+     * installed - JEI-only users are unaffected either way.
+     */
+    @Unique
+    private void createjeicompat$scheduleRefresh() {
+        Minecraft.getInstance().execute(() -> {
+            JeiRecipesGuiRefresher.refreshIfShowing();
+            if (net.minecraftforge.fml.ModList.get().isLoaded("emi")) {
+                EmiRecipeScreenRefresher.refreshIfShowing();
+            }
+        });
     }
 
     // ---- getTooltipStrings: paginated step tooltips + button hint ----
