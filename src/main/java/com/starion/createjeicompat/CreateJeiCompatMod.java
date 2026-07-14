@@ -3,6 +3,7 @@ package com.starion.createjeicompat;
 import net.minecraftforge.fml.common.Mod;
 
 /**
+ *The code was created using Claude.
  * Create JEI/EMI Compat - adds pagination (page-turn buttons) to Create's
  * Sequenced Assembly recipe display, so recipes with more than 6 steps
  * display correctly in both JEI and EMI.
@@ -24,5 +25,5 @@ import net.minecraftforge.fml.common.Mod;
  */
 @Mod(CreateJeiCompatMod.MOD_ID)
 public class CreateJeiCompatMod {
-    public static final String MOD_ID = "createjeicompat";
+    public static final String MOD_ID = "createjeicompatemifix";
 }
