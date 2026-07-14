@@ -32,7 +32,7 @@ minecraft {
             arg '-mixin.config=createjeicompat.mixins.json'
             property 'forge.logging.console.level', 'debug'
             mods {
-                createjeicompat {
+                createjeicompatemifix {
                     source sourceSets.main
                 }
             }
@@ -59,6 +59,11 @@ dependencies {
     // provides the real ones at runtime.
     compileOnly fg.deobf(files('libs/create-1.20.1-6.0.8.jar'))
     compileOnly fg.deobf(files('libs/jei-1.20.1-forge-15.20.0.106.jar'))
+
+    // EMI: only needed to COMPILE against (for EmiRecipeScreenRefresher). EMI is an
+    // optional dependency at runtime (see mods.toml) - the mod still works fine on
+    // setups that don't have EMI installed at all.
+    compileOnly fg.deobf(files('libs/emi-1.1.24+1.20.1+forge.jar'))
 }
 
 jar {
