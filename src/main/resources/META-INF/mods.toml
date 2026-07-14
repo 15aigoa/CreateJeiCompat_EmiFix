@@ -3,38 +3,37 @@ loaderVersion="[47,)"
 license="MIT"
 
 [[mods]]
-modId="createjeicompat"
+modId="createjeicompatemifix"
 version="${file.jarVersion}"
 displayName="Create JEI/EMI Compat"
 authors="Igoa"
 description='''
 Adds pagination (page-turn buttons) to Create's Sequenced Assembly recipe display
 in JEI and EMI, so recipes with more than 6 steps display correctly.
-Created using Claude.
 '''
 
-[[dependencies.createjeicompat]]
+[[dependencies.createjeicompatemifix]]
     modId="forge"
     mandatory=true
     versionRange="[47,)"
     ordering="NONE"
     side="BOTH"
 
-[[dependencies.createjeicompat]]
+[[dependencies.createjeicompatemifix]]
     modId="minecraft"
     mandatory=true
     versionRange="[1.20.1,1.20.2)"
     ordering="NONE"
     side="CLIENT"
 
-[[dependencies.createjeicompat]]
+[[dependencies.createjeicompatemifix]]
     modId="create"
     mandatory=true
     versionRange="[6.0.0,)"
     ordering="AFTER"
     side="CLIENT"
 
-[[dependencies.createjeicompat]]
+[[dependencies.createjeicompatemifix]]
     modId="jei"
     mandatory=true
     versionRange="[15.20.0,)"
@@ -43,7 +42,7 @@ Created using Claude.
 
 # EMI is optional: the mod works standalone with JEI, and automatically also
 # benefits EMI (via EMI's built-in JEI compatibility layer) if EMI is present.
-[[dependencies.createjeicompat]]
+[[dependencies.createjeicompatemifix]]
     modId="emi"
     mandatory=false
     versionRange="[1.1.0,)"
