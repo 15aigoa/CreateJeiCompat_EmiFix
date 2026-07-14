@@ -4,10 +4,11 @@ Special thanks to Starior for creating the original project.
 This fork was made possible largely thanks to Claude.
 
 ## Points to note when building
-Please make sure to place these two JAR files in the `libs` folder before building:
+Make sure to place these three JAR files in the `libs` folder before building:
 
 1. create-1.20.1-6.0.8.jar   (https://modrinth.com/mod/create/version/mc1.20.1-6.0.8)
 2. jei-1.20.1-forge-15.20.0.106.jar   (https://modrinth.com/mod/jei/version/WTWP98yg)
+3. emi-1.1.24+1.20.1+forge.jar (https://modrinth.com/mod/emi/version/1.1.24+1.20.1+forge)
 
 ### Make sure to place these two JAR files in the `libs` folder before building.
 
